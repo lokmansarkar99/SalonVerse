@@ -14,8 +14,6 @@ export const sendOTP = async (phoneNumber: string) => {
         // Ensure E.164 format
         const formattedPhone = phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`;
 
-        console.log(`[Twilio] Sending OTP to: ${formattedPhone}`);
-
         const verification = await client.verify.v2
             .services(SERVICE_SID)
             .verifications.create({
@@ -35,9 +33,6 @@ export const verifyOTP = async (phoneNumber: string, code: string) => {
     try {
         // Ensure E.164 format
         const formattedPhone = phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`;
-
-        console.log(`[Twilio] Verifying OTP for: ${formattedPhone}`);
-
         const result = await client.verify.v2
             .services(SERVICE_SID)
             .verificationChecks.create({

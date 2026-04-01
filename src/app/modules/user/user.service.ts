@@ -221,6 +221,7 @@ export const createUser = async (payload: any) => {
         const token = await CreateUserToken(user[0]);
         return {
             isNewUser: true,
+            userId: user[0]._id,
             accessToken: token.accessToken,
             refreshToken: token.refreshToken,
         };

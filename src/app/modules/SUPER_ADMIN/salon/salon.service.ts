@@ -188,12 +188,15 @@ const getSingleSalon = async (id: string, userId: string, lat1: string, lon1: st
             }
         }
     ]);
+    const isVisited = await ViewReward.findOne({ salonId: salon._id, userId: userId, updatedAt: new Date().toISOString().split("T")[0] });
     return {
         ...salon.toObject(),
+        isVisited: !!isVisited,
         totalOnline,
         distance,
         averageRating: result[0]?.averageRating,
-        totalRatings: result[0]?.totalRatings
+        totalRatings: result[0]?.totalRatings,
+
     };
 };
 const getSalonSetting = async (user: string) => {
