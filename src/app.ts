@@ -17,6 +17,7 @@ app.post(
 );
 app.use(cors({
     origin: [
+         "https://dashboard.zenaapp.net",
         "http://10.10.7.37:3000",
         "http://10.10.7.37:3000",
         "http://localhost:3002",
