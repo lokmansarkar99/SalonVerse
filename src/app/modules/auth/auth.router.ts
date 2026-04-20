@@ -21,4 +21,6 @@ router.post("/forget-password", authController.forgetPassword)
 // ----------- 
 router.post("/change-password", checkAuth(USER_ROLE.SUPER_ADMIN, USER_ROLE.USER, USER_ROLE.OWNER), authController.changePassword)
 
+router.post("/send-phone-otp", authController.sendPhoneOtp)
+
 export const authRouter = router

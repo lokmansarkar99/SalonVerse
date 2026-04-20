@@ -115,6 +115,17 @@ const changePassword = catchAsync(async (req: Request, res: Response, next: Next
 })
 
 
+const sendPhoneOtp = catchAsync(async (req: Request, res: Response, next: NextFunction) => { 
+    const { phoneNumber } = req.body
+    const result = await authService.sendPhoneOtp(phoneNumber)
+    res.status(200).json({
+        success: true,
+        message: "OTP sent successfully",
+        data: result
+    })
+
+})
+
 export const authController = {
     loginCredential,
     loginSuperAdmin,
@@ -124,5 +135,6 @@ export const authController = {
     userVerify,
     forgetPassword,
     changePassword,
-    googleLogin
+    googleLogin,
+    sendPhoneOtp
 }
