@@ -142,7 +142,7 @@ export const createUser = async (payload: any) => {
                     phoneNumber,
                     referralCode: generateNumber(8),
                     invitedBy: inviterUser ? inviterUser._id : null,
-                    isPhoneVerified: true,
+                    verified: true,
                     status: IStatus.ACTIVE,
                 },
             ],
