@@ -25,6 +25,6 @@ router.post("/rating/:id", checkAuth(USER_ROLE.USER), catchAsync(salonController
 
 
 router.delete("/:id", checkAuth(USER_ROLE.SUPER_ADMIN), catchAsync(salonController.deleteSalon));
-// router.post("/visit-confirm/:id", checkAuth(USER_ROLE.USER), catchAsync(salonController.visitConfirm))
+router.post("/visit-confirm/:id", checkAuth(USER_ROLE.USER), catchAsync(salonController.visitConfirm))
 
 export const SalonRoutes = router;

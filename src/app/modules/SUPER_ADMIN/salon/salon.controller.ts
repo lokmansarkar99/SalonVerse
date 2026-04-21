@@ -74,19 +74,19 @@ const deleteSalon = catchAsync(async (req: Request, res: Response) => {
 });
 
 
-// const visitConfirm = catchAsync(async (req: Request, res: Response) => {
-//     const user = req.user.userId;
-//     const { lat1, lon1 } = req.query;
-//     if (!lat1 || !lon1) {
-//         throw new AppError(httpStatus.BAD_REQUEST, "Latitude and longitude are required");
-//     }
-//     const result = await salonService.visitConfirm(req.params.id as string, user, lat1 as string, lon1 as string);
+const visitConfirm = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user.userId;
+    const { lat1, lon1 } = req.query;
+    if (!lat1 || !lon1) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Latitude and longitude are required");
+    }
+    const result = await salonService.visitConfirm(req.params.id as string, user, lat1 as string, lon1 as string);
 
-//     res.status(200).json({
-//         success: true,
-//         message: result.message
-//     });
-// });
+    res.status(200).json({
+        success: true,
+        message: result.message
+    });
+});
 
 
 const salonMenagement = catchAsync(async (req: Request, res: Response) => {
@@ -116,7 +116,7 @@ export const salonController = {
     getSingleSalon,
     updateSalon,
     deleteSalon,
-    // visitConfirm,
+    visitConfirm,
     getSalonSetting,
     salonMenagement,
     createRating
