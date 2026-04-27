@@ -1,10 +1,11 @@
 // salon.service.ts
 import httpStatus from "http-status-codes";
+import bcrypt from "bcrypt";
 import { RatingModel, SalonModel } from "./salon.model";
 import AppError from "../../../errorHalper.ts/AppError";
 import { UserModel } from "../../user/user.model";
 import { IStatus, USER_ROLE } from "../../user/user.interface";
-import { generateHashCode } from "../../../utils/generate";
+import generateNumber, { generateHashCode } from "../../../utils/generate";
 import { QueryBuilder } from "../../../utils/QueryBuilder";
 import { visitSalon } from "./visitRecord";
 import { PointIssuedHistory, PurchaseReward, Reward, ViewReward } from "../../reward/reward.model";
@@ -24,19 +25,46 @@ const createSalon = async (payload: any, user: string) => {
         throw new AppError(httpStatus.FORBIDDEN, "You are not authorized");
     }
 
-    const exist = await SalonModel.findOne({ email: payload.email });
+    const { email, phone, password, ...salonPayload } = payload;
+
+    if (!email || !phone || !password) {
+        throw new AppError(httpStatus.BAD_REQUEST, "Admin email, phone, and password are required");
+    }
+
+    const exist = await SalonModel.findOne({ email });
 
     if (exist) {
         throw new AppError(httpStatus.BAD_REQUEST, "Salon already exists");
     }
-    const adminInfo = await UserModel.findById(payload.admin);
-    if (!adminInfo) {
-        throw new AppError(httpStatus.NOT_FOUND, "Admin not found");
+
+    let adminInfo = await UserModel.findOne({ $or: [{ email }, { phoneNumber: phone }] });
+
+    if (adminInfo) {
+        throw new AppError(httpStatus.BAD_REQUEST, "User with this email or phone already exists");
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    adminInfo = await UserModel.create({
+        name: salonPayload.businessName || "Salon Admin",
+        email: email,
+        phoneNumber: phone,
+        password: hashedPassword,
+        role: USER_ROLE.OWNER,
+        verified: true,
+        status: IStatus.ACTIVE,
+        referralCode: generateNumber(8).toString()
+    });
 
     const generateSalonId = await generateHashCode(adminInfo);
 
-    const salon = await SalonModel.create({ ...payload, createdBy: superAdmin._id, salonId: generateSalonId });
+    const salon = await SalonModel.create({ 
+        ...salonPayload, 
+        email, 
+        phone, 
+        admin: adminInfo._id, 
+        createdBy: superAdmin._id, 
+        salonId: generateSalonId 
+    });
     return salon;
 };
 // daily Subscription Check 
