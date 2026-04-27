@@ -136,7 +136,7 @@ const loginCredential = async (data: { phoneNumber: string; otp: string }) => {
 const loginSuperAdmin = async (data: IUser) => {
   const result = await UserModel.findOne({
     email: data.email,
-    role: USER_ROLE.SUPER_ADMIN,
+    role: { $in: [USER_ROLE.SUPER_ADMIN, USER_ROLE.OWNER] },
   }).select('name email role image verified password');
 
   if (!result) {
