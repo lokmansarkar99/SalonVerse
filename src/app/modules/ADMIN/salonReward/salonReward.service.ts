@@ -84,9 +84,6 @@ const globalReward = async (userId: string, query: any) => {
 
     const userViewReward = await ViewReward.find({ userId: userId });
 
-    if (userViewReward.length === 0) {
-        throw new AppError(httpStatus.NOT_FOUND, "Reward not found");
-    }
 
     // Extract salonIds
     const salonIds = userViewReward.map(item => item.salonId).filter((id): id is Types.ObjectId => !!id);
