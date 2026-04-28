@@ -47,9 +47,9 @@ const deleteNotification = async (id: string) => {
 const getNotificationCount = async (userId: string) => {
     const notification = await NotificationModel.countDocuments({ receiverId: userId, isDeleted: false, read: false })
     if (!notification) {
-        throw new AppError(httpStatus.NOT_FOUND, "Notification not found")
+        return 0;
     }
-    return notification
+    return notification;
 }
 
 export const NotificationService = {

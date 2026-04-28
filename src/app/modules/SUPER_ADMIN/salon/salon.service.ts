@@ -100,7 +100,7 @@ const getAllSalon = async (query: any) => {
         queryBuilder.build(),
     ]);
     if (data.length === 0) {
-        throw new AppError(httpStatus.NOT_FOUND, "No purchase history found");
+        return { allData: [], meta };
     }
     const allData = await Promise.all(
         data.map(async (salon) => {

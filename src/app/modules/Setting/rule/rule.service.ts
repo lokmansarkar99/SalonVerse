@@ -41,10 +41,10 @@ const tireRule = async (payload: any, userId: string) => {
 const getTire = async () => {
      const result = await Tire.find();
      if (result.length === 0) {
-          throw new AppError(StatusCodes.NOT_FOUND, "Tire not found",)
+          return [];
      }
      return result;
-}
+}    
 
 const updateTire = async (payload: any, id: string) => {
      const result = await Tire.findByIdAndUpdate(id, payload, { new: true });
