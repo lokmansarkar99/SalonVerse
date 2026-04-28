@@ -263,7 +263,9 @@ const updateUser = async (payload: any, owner: JwtPayload) => {
     if (payload.image && result.image) {
         unlinkFile(result.image);
     }
-    return await UserModel.findOneAndUpdate({ _id: owner.userId }, payload, { new: true });
+    await UserModel.findOneAndUpdate({ _id: owner.userId }, payload, { new: true });
+
+    return await userDetails(owner.userId);
 };
 
 const userDetails = async (userId: string) => {
