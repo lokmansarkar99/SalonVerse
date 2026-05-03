@@ -1,5 +1,6 @@
 import { firebaseAdmin } from "../middleware/firebaseAdmin";
 import { NotificationModel } from "../modules/notification/notification.model";
+import { NotificationLogModel } from "../modules/notification/notificationLog.model";
 
 // Event list for DB saving
 const EVENTS_TO_SAVE = ['LOGIN', 'LOGOUT', 'MESSAGE', 'LIKE', 'COMMENT', 'FOLLOW', 'EVENT_REMINDER'];
@@ -16,6 +17,7 @@ interface NotificationPayload {
     referenceType?: string;
     image?: string;
     saveToDatabase?: boolean;
+    sendOnceKey?: string;
 }
 
 // Main reusable notification function
@@ -29,8 +31,19 @@ export const firebaseNotificationBuilder = async ({
     referenceId,
     referenceType,
     image = "",
-    saveToDatabase = true
+    saveToDatabase = true,
+    sendOnceKey
 }: NotificationPayload) => {
+
+    if (sendOnceKey && user?._id) {
+        const alreadySent = await NotificationLogModel.findOne({ userId: user._id, type: sendOnceKey });
+        if (alreadySent) {
+            console.log(`Notification ${sendOnceKey} already sent to user ${user._id}. Skipping.`);
+            return;
+        }
+    }
+
+    if (!title || !body) return; // Prevent empty notifications
 
     const promises: Promise<any>[] = [];
 
@@ -99,6 +112,15 @@ export const firebaseNotificationBuilder = async ({
                 notificationType,
                 notificationEvent,
                 read: false
+            })
+        );
+    }
+
+    if (sendOnceKey && user?._id) {
+        promises.push(
+            NotificationLogModel.create({
+                userId: user._id,
+                type: sendOnceKey
             })
         );
     }

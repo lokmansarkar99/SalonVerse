@@ -12,14 +12,10 @@ export const startCheckSubscriptionCron = () => cron.schedule("0 0 * * *", async
     await dailySubscriptionCheck();
 });
 
-
 export const startRewardExpireCron = () => {
-
-    // Every 10 minutes run hobe
     cron.schedule("0 0 * * *", async () => {
         try {
             const now = new Date();
-
             const result = await Reward.updateMany(
                 {
                     expiresAt: { $lt: now },
@@ -30,13 +26,11 @@ export const startRewardExpireCron = () => {
                     $set: { status: IStatus.EXPIRED }
                 }
             );
-
             console.log(`Expired rewards updated: ${result.modifiedCount}`);
         } catch (error) {
             console.error("Reward expire cron error:", error);
         }
     });
-
 };
 
 export const startNotificationCrons = () => {
@@ -47,25 +41,27 @@ export const startNotificationCrons = () => {
             console.log("Daily engagement crons started");
             const now = new Date();
             const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-            // Phase 1 - Notification 2: Complete Profile (incomplete > 1 day)
+            // Phase 1 - 2. Complete Profile
             const incompleteUsers = await UserModel.find({
                 isCompleted: false,
                 createdAt: { $lt: oneDayAgo },
                 fcmToken: { $exists: true, $ne: "" }
-            }).select("+fcmToken");
+            }).select("+fcmToken languages");
+            
             incompleteUsers.forEach(user => {
+                const isArabic = (user as any).languages === 'AR';
                 firebaseNotificationBuilder({
                     user,
-                    title: "Complete Your Profile ✨",
-                    body: "So salons can recognize you instantly ✨",
+                    title: isArabic ? '✨ كمّلي ملفك' : 'Complete your profile ✨',
+                    body: isArabic ? 'عشان يكون حضورك واضح عند زيارتك 💖' : 'So salons can recognize you instantly',
+                    sendOnceKey: "complete_profile",
+                    notificationEvent: INOTIFICATION_EVENT.LOGIN,
                     saveToDatabase: false
                 });
             });
 
-            // Phase 1 - Notification 3: First Visit Push (no visits after 1 day)
+            // Phase 1 - 3. First Visit Push
             const newUsersWithNoVisits = await UserModel.aggregate([
                 { $match: { createdAt: { $lt: oneDayAgo }, fcmToken: { $exists: true, $ne: "" } } },
                 {
@@ -77,62 +73,84 @@ export const startNotificationCrons = () => {
                     }
                 },
                 { $match: { "visits.0": { $exists: false } } },
-                { $project: { fcmToken: 1, name: 1, email: 1 } }
+                { $project: { fcmToken: 1, name: 1, email: 1, languages: 1 } }
             ]);
-            // Since aggregate results are POJOs, and fcmToken was in the match, it might be there if not explicitly excluded, 
-            // but we might need to project it in aggregate if it's select:false.
-            // Let's add a projection to be safe.
             newUsersWithNoVisits.forEach(user => {
+                const isArabic = user.languages === 'AR';
                 firebaseNotificationBuilder({
                     user,
-                    title: "Your glow starts here",
-                    body: "Your glow starts with one visit ✨",
+                    title: isArabic ? '✨ كل شي يبدأ بزيارة وحدة' : 'Your glow starts here',
+                    body: isArabic ? 'خليها اليوم 💖' : 'Your glow starts with one visit ✨',
+                    sendOnceKey: "first_visit",
+                    notificationEvent: INOTIFICATION_EVENT.VISIT,
                     saveToDatabase: false
                 });
             });
 
-            // Phase 2 - Notification 5, 6, 7: Reminders (1, 3, 7 days)
-            // 24h After Visit
-            const oneDayReminders = await ViewReward.find({
-                lastVisitAt: { $lt: oneDayAgo, $gt: new Date(oneDayAgo.getTime() - 12 * 60 * 60 * 1000) }
-            }).populate({ path: "userId", select: "+fcmToken" });
-            oneDayReminders.forEach(reward => {
-                if ((reward.userId as any)?.fcmToken) {
-                    firebaseNotificationBuilder({
-                        user: reward.userId,
-                        title: "You looked amazing yesterday",
-                        body: "Ready for your next glow?",
-                        saveToDatabase: false
-                    });
-                }
-            });
+            // Post Visit Reminders (Phase 2) & Dormant (Phase 6)
+            const viewRewards = await ViewReward.find().populate({ path: "userId", select: "+fcmToken languages coins" });
+            
+            viewRewards.forEach(reward => {
+                const user = reward.userId as any;
+                if (!user?.fcmToken) return;
 
-            // 3-Day Reminder
-            const threeDayReminders = await ViewReward.find({
-                lastVisitAt: { $lt: threeDaysAgo, $gt: new Date(threeDaysAgo.getTime() - 12 * 60 * 60 * 1000) }
-            }).populate({ path: "userId", select: "+fcmToken" });
-            threeDayReminders.forEach(reward => {
-                if ((reward.userId as any)?.fcmToken) {
-                    firebaseNotificationBuilder({
-                        user: reward.userId,
-                        title: "A little self-care never hurts",
-                        body: "It's been 3 days since your last visit. Treat yourself!",
-                        saveToDatabase: false
-                    });
-                }
-            });
+                const isArabic = user.languages === 'AR';
+                const lastVisitAt = new Date(reward.lastVisitAt).getTime();
+                const daysSinceVisit = Math.floor((now.getTime() - lastVisitAt) / (1000 * 60 * 60 * 24));
 
-            // 7-Day Reminder
-            const sevenDayReminders = await ViewReward.find({
-                lastVisitAt: { $lt: sevenDaysAgo, $gt: new Date(sevenDaysAgo.getTime() - 12 * 60 * 60 * 1000) }
-            }).populate({ path: "userId", select: "+fcmToken" });
-            sevenDayReminders.forEach(reward => {
-                if ((reward.userId as any)?.fcmToken) {
-                    firebaseNotificationBuilder({
-                        user: reward.userId,
-                        title: "Time to feel fresh again",
-                        body: "It’s been a week… time to feel fresh again ✨",
-                        saveToDatabase: false
+                if (daysSinceVisit === 1) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '✨ طلعتي تبرقين أمس' : 'You looked amazing yesterday ✨',
+                        body: isArabic ? 'جاهزة للـ glow الجاي؟ 💖' : 'Ready for your next glow?',
+                        sendOnceKey: "visit_24h", 
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false 
+                    });
+                } else if (daysSinceVisit === 3) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '💖 شوية دلع لنفسك ما يضر' : 'A little self-care never hurts 💖',
+                        body: isArabic ? 'خذي لك موعد خفيف ✨' : 'Treat yourself today',
+                        sendOnceKey: "reminder_3d", 
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false 
+                    });
+                } else if (daysSinceVisit === 7) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '✨ صار لك أسبوع' : 'It’s been a week… time to feel fresh again ✨',
+                        body: isArabic ? 'مو وقت لمسة تجددك؟ 💅💖' : 'Book your session',
+                        sendOnceKey: "reminder_7d", 
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false 
+                    });
+                } else if (daysSinceVisit === 10) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '💔 اشتقنا لك' : 'We miss you 💔',
+                        body: isArabic ? 'مو وقت ترجعين تدلعين نفسك؟ 💖' : 'Let’s fix that with a little pampering ✨',
+                        sendOnceKey: "dormant_10", 
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false 
+                    });
+                } else if (daysSinceVisit === 14) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '💕 شاركي Zena مع صديقتك' : 'Share Zena with your bestie 💕',
+                        body: isArabic ? 'وكل وحدة فيكم تربح 💖✨' : 'You both win!',
+                        sendOnceKey: "invite_prompt", 
+                        notificationEvent: INOTIFICATION_EVENT.INVITE,
+                        saveToDatabase: false 
+                    });
+                } else if (daysSinceVisit === 20) {
+                    firebaseNotificationBuilder({ 
+                        user, 
+                        title: isArabic ? '✨ طولتي علينا' : 'It’s been a while… your glow is waiting ✨',
+                        body: isArabic ? 'جمالك ينتظرك 💖' : 'Book now',
+                        sendOnceKey: "dormant_20", 
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false 
                     });
                 }
             });
@@ -150,14 +168,18 @@ export const startNotificationCrons = () => {
 
             const users = await ViewReward.find({
                 lastVisitAt: { $lt: fiveDaysAgo }
-            }).populate({ path: "userId", select: "+fcmToken" });
+            }).populate({ path: "userId", select: "+fcmToken languages" });
 
             users.forEach(reward => {
-                if ((reward.userId as any)?.fcmToken) {
+                const user = reward.userId as any;
+                if (user?.fcmToken) {
+                    const isArabic = user.languages === 'AR';
                     firebaseNotificationBuilder({
-                        user: reward.userId,
-                        title: "Weekend is coming",
-                        body: "Ready for your glow?",
+                        user,
+                        title: isArabic ? '💖 الويكند قرب' : 'Weekend is coming 💖',
+                        body: isArabic ? 'وش رايك تدلعين نفسك؟ ✨' : 'Ready for your glow?',
+                        sendOnceKey: "weekend_prep",
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
                         saveToDatabase: false
                     });
                 }
@@ -167,7 +189,40 @@ export const startNotificationCrons = () => {
         }
     });
 
-    // 3️⃣ Saturday Evening Reminder (#17) at 6:00 PM
+    // 3️⃣ Friday Noon (#15, #16) at 12:00 PM
+    cron.schedule("0 12 * * 5", async () => {
+        try {
+            console.log("Friday noon cron started");
+            const users = await UserModel.find({ fcmToken: { $exists: true, $ne: "" } }).select("+fcmToken languages coins");
+            
+            users.forEach(user => {
+                const isArabic = (user as any).languages === 'AR';
+                if (user.coins && user.coins >= 300) {
+                    firebaseNotificationBuilder({
+                        user,
+                        title: isArabic ? '🎁 ويكند مثالي لمكافأتك' : 'Perfect weekend for your reward 🎁',
+                        body: isArabic ? 'زيارة وحدة وتاخذينها 💖✨' : 'One visit and it’s yours!',
+                        sendOnceKey: "weekend_reward",
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false
+                    });
+                } else {
+                    firebaseNotificationBuilder({
+                        user,
+                        title: isArabic ? '✨ صالونات قريبة منك' : 'Top salons near you ✨',
+                        body: isArabic ? 'اختاري دلعك اليوم 💖' : 'Ready for a glow session?',
+                        sendOnceKey: "nearby_salon",
+                        notificationEvent: INOTIFICATION_EVENT.VISIT,
+                        saveToDatabase: false
+                    });
+                }
+            });
+        } catch (error) {
+            console.error("Friday cron error:", error);
+        }
+    });
+
+    // 4️⃣ Saturday Evening Reminder (#17) at 6:00 PM
     cron.schedule("0 18 * * 6", async () => {
         try {
             console.log("Saturday evening cron started");
@@ -193,19 +248,70 @@ export const startNotificationCrons = () => {
                     }
                 },
                 { $match: { "weekendVisits.0": { $exists: false } } },
-                { $project: { fcmToken: 1, name: 1, email: 1 } }
+                { $project: { fcmToken: 1, name: 1, email: 1, languages: 1 } }
             ]);
 
             usersNoVisitWeekend.forEach(user => {
+                const isArabic = user.languages === 'AR';
                 firebaseNotificationBuilder({
                     user,
-                    title: "Last chance this weekend",
-                    body: "Don’t miss your glow session!",
+                    title: isArabic ? '✨ آخر فرصة هالويكند' : 'Last chance this weekend ✨',
+                    body: isArabic ? 'لا يفوتك الدلع 💖' : 'Don’t miss your glow',
+                    sendOnceKey: "weekend_last_call",
+                    notificationEvent: INOTIFICATION_EVENT.VISIT,
                     saveToDatabase: false
                 });
             });
         } catch (error) {
             console.error("Saturday cron error:", error);
+        }
+    });
+
+    // 5️⃣ End of Month Push (#20) at 10:00 AM on 25th to 31st
+    cron.schedule("0 10 25-31 * *", async () => {
+        try {
+            console.log("End of month cron started");
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            const usersWithLowVisits = await UserModel.aggregate([
+                { $match: { role: "USER", fcmToken: { $exists: true, $ne: "" } } },
+                {
+                    $lookup: {
+                        from: "viewrewards",
+                        let: { userId: "$_id" },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: { $eq: ["$userId", "$$userId"] },
+                                    lastVisitAt: { $gte: startOfMonth }
+                                }
+                            }
+                        ],
+                        as: "monthVisits"
+                    }
+                },
+                {
+                    $match: {
+                        $expr: { $lt: [{ $size: "$monthVisits" }, 3] }
+                    }
+                },
+                { $project: { fcmToken: 1, name: 1, email: 1, languages: 1 } }
+            ]);
+
+            usersWithLowVisits.forEach(user => {
+                const isArabic = user.languages === 'AR';
+                firebaseNotificationBuilder({
+                    user,
+                    title: isArabic ? '✨ لا يفوتك glow هذا الشهر' : 'Don’t miss your monthly glow ✨',
+                    body: isArabic ? 'زيارة وحدة وتكملين 💖' : 'One more visit?',
+                    sendOnceKey: "end_month",
+                    notificationEvent: INOTIFICATION_EVENT.VISIT,
+                    saveToDatabase: false
+                });
+            });
+        } catch (error) {
+            console.error("End of month cron error:", error);
         }
     });
 };

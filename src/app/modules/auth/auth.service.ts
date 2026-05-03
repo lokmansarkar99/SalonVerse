@@ -57,10 +57,12 @@ const googleLogin = async (idToken: string) => {
     const tokens = await CreateUserToken(user);
 
     if (isNewUser && user && (user as any).fcmToken) {
+      const isArabic = (user as any).languages === 'AR';
       firebaseNotificationBuilder({
         user,
-        title: 'Welcome to Zena',
-        body: 'Your glow journey starts here',
+        title: isArabic ? '💖 حياك في Zena' : 'Welcome to Zena 💖',
+        body: isArabic ? 'رحلة جمالك تبدأ من هنا ✨' : 'Your glow journey starts here',
+        sendOnceKey: 'welcome',
         notificationEvent: INOTIFICATION_EVENT.LOGIN,
       });
     }

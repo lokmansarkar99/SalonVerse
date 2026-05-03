@@ -81,15 +81,75 @@ const approveVisitCoin = async (id: string, userId: string) => {
         throw new AppError(httpStatus.FORBIDDEN, "You are not Owner");
     }
 
-    let status = ''
+    let status = visit.status;
+    let updatedUserCoins = rewardOwner.coins || 0;
+
     if (visit.status === IStatus.PENDING) {
         status = IStatus.APPROVED
 
-        await rewardOwner.updateOne({ $inc: { coins: visit.pendingCoins } })
-        await visit.updateOne({ pendingCoins: 0 })
+        const updatedOwner = await UserModel.findByIdAndUpdate(
+            rewardOwner._id,
+            { $inc: { coins: visit.pendingCoins } },
+            { new: true }
+        ).select('+fcmToken languages coins');
 
+        if (updatedOwner) {
+            updatedUserCoins = updatedOwner.coins || 0;
+            // Temporarily assign for firebase builder
+            (rewardOwner as any).fcmToken = updatedOwner.fcmToken;
+            (rewardOwner as any).languages = updatedOwner.languages;
+        }
+
+        await visit.updateOne({ pendingCoins: 0, status })
+
+        // Phase 2 - 4. After First Visit
+        const totalVisits = await ViewReward.countDocuments({ userId: rewardOwner._id, status: IStatus.APPROVED });
+        const isArabic = rewardOwner.languages === 'AR';
+
+        if (totalVisits === 1) {
+            firebaseNotificationBuilder({
+                user: rewardOwner,
+                title: isArabic ? '💖 هذي كانت البداية بس' : 'That was just the beginning 💖',
+                body: isArabic ? 'الأحلى جاي ✨' : 'Ready for more?',
+                sendOnceKey: "after_first_visit",
+                notificationEvent: INOTIFICATION_EVENT.VISIT,
+                saveToDatabase: false
+            });
+        }
+
+        // Phase 3 - Reward Engine
+        if (updatedUserCoins >= 100 && updatedUserCoins < 200) {
+            firebaseNotificationBuilder({
+                user: rewardOwner,
+                title: isArabic ? '💖 بدأتي تجمعين نقاطك' : 'You’ve started collecting points 💖',
+                body: isArabic ? 'كمّلي 💫' : 'Keep going!',
+                sendOnceKey: "points_start",
+                notificationEvent: INOTIFICATION_EVENT.CLAIM_REWARD,
+                saveToDatabase: false
+            });
+        } else if (updatedUserCoins >= 200 && updatedUserCoins < 300) {
+            firebaseNotificationBuilder({
+                user: rewardOwner,
+                title: isArabic ? '✨ قريب توصّلين لشي حلو' : 'You’re getting closer to something special ✨',
+                body: isArabic ? 'كمّلي زياراتك 💖' : 'Keep it up!',
+                sendOnceKey: "mid_progress",
+                notificationEvent: INOTIFICATION_EVENT.CLAIM_REWARD,
+                saveToDatabase: false
+            });
+        } else if (updatedUserCoins >= 300) {
+            firebaseNotificationBuilder({
+                user: rewardOwner,
+                title: isArabic ? '💖 مكافأتك صارت جاهزة' : 'Your reward is ready 💖',
+                body: isArabic ? 'دلعي نفسك اليوم ✨' : 'Go enjoy it!',
+                sendOnceKey: "reward_ready",
+                notificationEvent: INOTIFICATION_EVENT.CLAIM_REWARD,
+                saveToDatabase: false
+            });
+        }
+    } else {
+        await visit.updateOne({ status })
     }
-    await visit.updateOne({ status })
+
     // realtime notification for admin
     socketHelper.emit("notification", {
         receiver: rewardOwner._id,

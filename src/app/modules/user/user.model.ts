@@ -1,5 +1,5 @@
 import { model, Schema } from "mongoose";
-import { USER_ROLE, IStatus, IUser, IAuthProvider } from "./user.interface";
+import { USER_ROLE, IStatus, IUser, IAuthProvider, LANGUAGES } from "./user.interface";
 
 const authProviderSchema = new Schema<IAuthProvider>({
     provider: { type: String, required: true },
@@ -20,7 +20,7 @@ export const UserSchema = new Schema<IUser>({
         country: { type: String, },
         zipCode: { type: String, },
     },
-
+    languages: {type: String, enum: Object.values(LANGUAGES), default: LANGUAGES.EN},
     dateOfBirth: { type: Date, },
     secretRefreshToken: { type: [String], default: [], select: false },
     auths: [authProviderSchema],

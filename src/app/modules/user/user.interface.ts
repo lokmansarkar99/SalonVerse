@@ -7,6 +7,11 @@ export enum USER_ROLE {
     SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
+export enum LANGUAGES {
+    EN = 'EN',
+    AR= 'AR'
+}
+
 export enum IStatus {
     PENDING = 'PENDING',
     APPROVED = 'APPROVED',
@@ -43,7 +48,7 @@ export interface IUser {
         country: string;
         zipCode?: string;
     };
-
+languages: LANGUAGES;
     coins?: number;
     pendingCoins?: number;
     spentCoins?: number;

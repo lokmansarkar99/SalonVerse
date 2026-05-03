@@ -193,11 +193,13 @@ export const createUser = async (payload: any) => {
                     read: false,
                 });
             }
+            const isArabic = inviterUser.languages === 'AR';
             Promise.allSettled([
                 firebaseNotificationBuilder({
                     user: inviterUser,
-                    title: "Referral Success",
-                    body: "Your friend joined 💖 You earned something special!",
+                    title: isArabic ? '💖 صديقتك سجلت!' : 'Your friend joined 💖',
+                    body: isArabic ? 'في شي حلو جاي لك ✨' : 'You earned something special!',
+                    sendOnceKey: 'referral_success',
                     notificationEvent: INOTIFICATION_EVENT.INVITE,
                 })
             ]);
@@ -209,10 +211,12 @@ export const createUser = async (payload: any) => {
 
         // 🔥 Push Notification for New User (#1 Welcome)
         if (user[0] && user[0].fcmToken) {
+            const isArabic = user[0].languages === 'AR';
             firebaseNotificationBuilder({
                 user: user[0],
-                title: "Welcome to Zena",
-                body: "Your glow journey starts here",
+                title: isArabic ? '💖 حياك في Zena' : 'Welcome to Zena 💖',
+                body: isArabic ? 'رحلة جمالك تبدأ من هنا ✨' : 'Your glow journey starts here',
+                sendOnceKey: 'welcome',
                 notificationEvent: INOTIFICATION_EVENT.LOGIN
             });
         }
