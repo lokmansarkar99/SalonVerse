@@ -92,10 +92,10 @@ export const startNotificationCrons = () => {
             
             viewRewards.forEach(reward => {
                 const user = reward.userId as any;
-                if (!user?.fcmToken) return;
+                if (!user?.fcmToken || !reward.lastVisitAt) return;
 
                 const isArabic = user.languages === 'AR';
-                const lastVisitAt = new Date(reward.lastVisitAt).getTime();
+                const lastVisitAt = new Date(reward.lastVisitAt as any).getTime();
                 const daysSinceVisit = Math.floor((now.getTime() - lastVisitAt) / (1000 * 60 * 60 * 24));
 
                 if (daysSinceVisit === 1) {
