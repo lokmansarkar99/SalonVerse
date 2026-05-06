@@ -45,6 +45,8 @@ const pointIssuedHistory = new Schema({
     userId: { type: Types.ObjectId, ref: "User" },
     salonId: { type: Types.ObjectId, ref: "Salon" },
     points: { type: Number },
+    services: { type: [String], default: [] },
+    totalBill: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
 })
 export const PointIssuedHistory = model("PointIssuedHistory", pointIssuedHistory);

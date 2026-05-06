@@ -76,7 +76,7 @@ const globalReward = catchAsync(async (req: Request, res: Response, next: NextFu
 // 🛄🛄🛄 clain reward
 const approveRedemption = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user.userId;
-    const result = await salonRewardService.approveRedemption(req.params.id as string, user as string);
+    const result = await salonRewardService.approveRedemption(req.params.id as string, user as string, req.body);
     res.status(200).json({
         success: true,
         message: "Approved redemption successfully",

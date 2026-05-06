@@ -210,6 +210,14 @@ const getAllRedemption = async (query: any, userId: string) => {
 
     let mongoQuery: any = {}
 
+    const userInfo = await UserModel.findById(userId);
+    if (userInfo?.role === USER_ROLE.OWNER) {
+        const salon = await SalonModel.findOne({ admin: userInfo._id });
+        if (salon) {
+            mongoQuery.salonId = salon._id;
+        }
+    }
+
     if (phone) {
         const user = await UserModel.findOne({ phoneNumber: phone });
         if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -290,7 +298,7 @@ const getAllRedemption = async (query: any, userId: string) => {
 
 }
 
-const approveRedemption = async (id: string, adminId: string) => {
+const approveRedemption = async (id: string, adminId: string, payload?: { services?: string[], totalBill?: number }) => {
     // id = userId passed by admin, adminId = logged-in admin
 
     // 1️⃣ Find the target user
@@ -321,7 +329,7 @@ const approveRedemption = async (id: string, adminId: string) => {
 
     // 4️⃣ Call visitSalon — handles daily limit, monthly limit, timezone bonus,
     //    coin calculation, ViewReward update, PointIssuedHistory, and all notifications
-    const result = await visitSalon(salon._id.toString(), user._id.toString());
+    const result = await visitSalon(salon._id.toString(), user._id.toString(), { ...payload, status: IStatus.APPROVED });
 
     return {
         message: `Visit approved! ${result.coinsBreakdown.total} coins granted to ${user.name}`,

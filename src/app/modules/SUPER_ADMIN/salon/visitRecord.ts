@@ -8,7 +8,7 @@ import { UserModel } from "../../user/user.model";
 import { SalonModel } from "./salon.model";
 import { firebaseNotificationBuilder } from "../../../shared/sendNotification";
 
-export const visitSalon = async (salonId: string, userId: string) => {
+export const visitSalon = async (salonId: string, userId: string, payload?: { services?: string[], totalBill?: number, status?: IStatus }) => {
     // 1️⃣ Check User
     const user = await UserModel.findById(userId).select("+fcmToken");
     if (!user) throw new AppError(404, "User not found");
@@ -122,7 +122,7 @@ export const visitSalon = async (salonId: string, userId: string) => {
                 totalVisitBonusCoins: isTotalVisitBonus ? rules.totalVisitGetCoin : 0,
             },
             $set: {
-                status: IStatus.APPROVED,
+                status: payload?.status || IStatus.PENDING,
                 lastVisitAt: new Date(),
             },
         },
@@ -133,6 +133,8 @@ export const visitSalon = async (salonId: string, userId: string) => {
         userId: userId,
         salonId: salonId,
         points: coinsToAdd,
+        services: payload?.services || [],
+        totalBill: payload?.totalBill || 0,
     })
 
     socketHelper.emit("notification", {

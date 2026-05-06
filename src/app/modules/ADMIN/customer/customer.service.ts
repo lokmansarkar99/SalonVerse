@@ -15,11 +15,22 @@ const getAllCustomer = async (query: any, userId: string) => {
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
     if (user.role !== USER_ROLE.OWNER && user.role !== USER_ROLE.SUPER_ADMIN) throw new AppError(httpStatus.FORBIDDEN, "You are not authorized");
 
-    const totalUser = UserModel.find({ role: USER_ROLE.USER }).select("name email image phoneNumber coins isOnline")
+    let baseQuery;
+    let totalCustomerFilter: any = { role: USER_ROLE.USER };
 
+    if (user.role === USER_ROLE.OWNER) {
+        const salon = await mongoose.model('Salon').findOne({ admin: user._id });
+        if (!salon) throw new AppError(httpStatus.NOT_FOUND, "Salon not found");
 
-    const queryBuilder = new QueryBuilder(totalUser, query)
-        .search(['name  phoneNumber'])
+        const visitedUserIds = await ViewReward.find({ salonId: salon._id }).distinct("userId");
+        totalCustomerFilter = { _id: { $in: visitedUserIds }, role: USER_ROLE.USER };
+        baseQuery = UserModel.find(totalCustomerFilter).select("name email image phoneNumber coins isOnline");
+    } else {
+        baseQuery = UserModel.find(totalCustomerFilter).select("name email image phoneNumber coins isOnline");
+    }
+
+    const queryBuilder = new QueryBuilder(baseQuery, query)
+        .search(['name', 'phoneNumber'])
         .filter()
         .limit()
         .paginate()
@@ -32,22 +43,28 @@ const getAllCustomer = async (query: any, userId: string) => {
         throw new AppError(httpStatus.NOT_FOUND, "No visit history found");
     }
 
-    const totalCustomer = await UserModel.countDocuments({
-        role: USER_ROLE.USER
-    })
+    const totalCustomer = await UserModel.countDocuments(totalCustomerFilter);
     const activeCustomer = await UserModel.countDocuments({
-        role: USER_ROLE.USER,
+        ...totalCustomerFilter,
         isOnline: true
-    })
+    });
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    let matchQuery: any = {
+        createdAt: {
+            $gte: todayStart
+        }
+    };
+    if (user.role === USER_ROLE.OWNER) {
+        const salon = await mongoose.model('Salon').findOne({ admin: user._id });
+        if (salon) {
+            matchQuery.salonId = salon._id;
+        }
+    }
+
     const TodayIssued = await PointIssuedHistory.aggregate([
         {
-            $match: {
-                createdAt: {
-                    $gte: todayStart
-                }
-            }
+            $match: matchQuery
         },
         {
             $group: {

@@ -10,7 +10,7 @@ import { VisitService } from "./visit.service";
 // user.controller.ts
 const getAllVisitRecord = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
 
-    const result = await VisitService.getAllVisitRecord(req.query);
+    const result = await VisitService.getAllVisitRecord({ ...req.query, reqUserId: req.user.userId });
     res.status(200).json({
         success: true,
         message: "All Visit Record fetched successfully",

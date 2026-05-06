@@ -30,6 +30,14 @@ const getAllVisitRecord = async (query: any) => {
         mongoQuery.salonId = salon._id
     }
 
+    const userInfo = await UserModel.findById(query.reqUserId);
+    if (userInfo?.role === USER_ROLE.OWNER) {
+        const salon = await SalonModel.findOne({ admin: userInfo._id });
+        if (salon) {
+            mongoQuery.salonId = salon._id;
+        }
+    }
+
     const result = ViewReward.find(mongoQuery).populate("userId", "name  phoneNumber").populate("salonId", "service businessName location").sort({ updatedAt: -1 });
 
     const queryBuilder = new QueryBuilder(result, rest)
