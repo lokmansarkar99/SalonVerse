@@ -9,6 +9,10 @@ const router = Router();
 router.route("/")
     .get(checkAuth(USER_ROLE.SUPER_ADMIN, USER_ROLE.OWNER), CustomerController.getAllCustomer)
 
+router.route("/create")
+    .post(checkAuth(USER_ROLE.OWNER, USER_ROLE.SUPER_ADMIN), CustomerController.createCustomerManually)
+
+
 
 router.route("/:id")
     .get(checkAuth(USER_ROLE.OWNER, USER_ROLE.SUPER_ADMIN, USER_ROLE.USER), CustomerController.singleUser)

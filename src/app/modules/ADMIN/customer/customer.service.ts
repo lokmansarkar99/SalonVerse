@@ -8,8 +8,58 @@ import httpStatus from "http-status-codes";
 import mongoose, { Mongoose } from "mongoose";
 import { firebaseNotificationBuilder } from "../../../shared/sendNotification";
 import { INOTIFICATION_EVENT, INOTIFICATION_TYPE } from "../../notification/notification.interface";
+import { visitSalon } from "../../SUPER_ADMIN/salon/visitRecord";
+import generateNumber from "../../../utils/generate";
 
 // customer.service.ts
+const createCustomerManually = async (payload: any, adminId: string) => {
+    const admin = await UserModel.findById(adminId);
+    if (!admin) throw new AppError(httpStatus.NOT_FOUND, "Admin not found");
+
+    if (admin.role !== USER_ROLE.OWNER && admin.role !== USER_ROLE.SUPER_ADMIN) {
+        throw new AppError(httpStatus.FORBIDDEN, "You are not authorized");
+    }
+
+    const salon = await mongoose.model('Salon').findOne({ admin: admin._id });
+    if (!salon) throw new AppError(httpStatus.NOT_FOUND, "Salon not found");
+
+    let user = await UserModel.findOne({ phoneNumber: payload.phoneNumber });
+    if (!user) {
+        user = await UserModel.create({
+            name: payload.name || "Customer",
+            phoneNumber: payload.phoneNumber,
+            role: USER_ROLE.USER,
+            verified: true,
+            status: IStatus.ACTIVE,
+            referralCode: generateNumber(8),
+        });
+    }
+
+    const visitResult = await visitSalon(salon._id.toString(), user._id.toString(), {
+        services: payload.services || [],
+        totalBill: payload.totalBill || 0,
+        status: IStatus.APPROVED
+    });
+
+    const coinsToGrant = visitResult.coinsBreakdown.total;
+
+    if (coinsToGrant > 0 && visitResult.reward) {
+        await UserModel.findByIdAndUpdate(user._id, {
+            $inc: { coins: coinsToGrant }
+        });
+
+        await ViewReward.findByIdAndUpdate(visitResult.reward._id, {
+            $inc: { pendingCoins: -coinsToGrant }
+        });
+    }
+
+    return {
+        user,
+        visitResult,
+        grantedCoins: coinsToGrant
+    };
+};
+
 const getAllCustomer = async (query: any, userId: string) => {
     const user = await UserModel.findById(userId);
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -138,6 +188,7 @@ const approvedReward = async (userId: string, reqUser: JwtPayload) => {
 }
 
 export const CustomerService = {
+    createCustomerManually,
     getAllCustomer,
     getSingleUser,
     approvedReward

@@ -8,6 +8,15 @@ import { JwtPayload } from "jsonwebtoken";
 
 
 // user.controller.ts
+const createCustomerManually = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const result = await CustomerService.createCustomerManually(req.body, req.user.userId as string);
+    res.status(200).json({
+        success: true,
+        message: "Customer created and visit added successfully",
+        data: result,
+    });
+});
+
 const getAllCustomer = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
 
     const result = await CustomerService.getAllCustomer(req.query, req.user.userId as string);
@@ -44,6 +53,7 @@ const approvedReward = catchAsync(async (req: Request, res: Response, next: Next
 })
 
 export const CustomerController = {
+    createCustomerManually,
     getAllCustomer,
     singleUser,
     approvedReward
