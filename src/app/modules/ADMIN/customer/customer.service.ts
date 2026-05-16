@@ -31,7 +31,7 @@ const createCustomerManually = async (payload: any, adminId: string) => {
             role: USER_ROLE.USER,
             verified: true,
             status: IStatus.ACTIVE,
-            referralCode: generateNumber(8),
+            referralCode: generateNumber(8).toString(),
         });
     }
 
