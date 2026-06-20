@@ -12,7 +12,7 @@ import { saveNotification, socketHelper } from "../../../helpers/socketHelper";
 
 // visit.service.ts
 const getAllVisitRecord = async (query: any) => {
-    const { userId, salonId, ...rest } = query;
+    const { userId, salonId, reqUserId, ...rest } = query;
     const mongoQuery: any = {}
 
     if (userId) {
