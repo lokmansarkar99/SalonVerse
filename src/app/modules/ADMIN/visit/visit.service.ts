@@ -38,7 +38,7 @@ const getAllVisitRecord = async (query: any) => {
         }
     }
 
-    const result = ViewReward.find(mongoQuery).populate("userId", "name  phoneNumber").populate("salonId", "service businessName location").sort({ updatedAt: -1 });
+    const result = ViewReward.find(mongoQuery).populate("userId", "name phoneNumber").populate("salonId", "service businessName location").sort({ updatedAt: -1 });
 
     const queryBuilder = new QueryBuilder(result, rest)
         .search(['name'])
@@ -58,15 +58,15 @@ const getAllVisitRecord = async (query: any) => {
 
     const resultData = data?.map((item: any) => {
         return {
-            user: item.userId.name || 'N/A',
-            userId: item.userId._id,
+            user: item.userId?.name || 'N/A',
+            userId: item.userId?._id,
             rewardId: item._id,
             lastView: item.lastVisitAt,
             totalVisit: item.totalVisit,
-            salonName: item.salonId.businessName,
-            location: item.salonId.location,
+            salonName: item.salonId?.businessName || 'N/A',
+            location: item.salonId?.location || 'N/A',
             totalPoint: item.pendingCoins,
-            serviceName: item.salonId.service,
+            serviceName: item.salonId?.service || 'N/A',
             status: item.status,
         }
     })
