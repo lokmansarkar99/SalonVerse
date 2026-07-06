@@ -337,7 +337,7 @@ const getAllRedemption = async (query: any, userId: string) => {
 const approveRedemption = async (
   id: string,
   adminId: string,
-  payload?: { services?: string[]; totalBill?: number },
+  payload?: { services?: string[]; totalBill?: number; points?: number },
 ) => {
   // id = userId passed by admin, adminId = logged-in admin
 
@@ -362,46 +362,93 @@ const approveRedemption = async (
   if (!salon)
     throw new AppError(httpStatus.NOT_FOUND, "Salon not found for this admin");
 
-  // 4️⃣ Find today's visit that is pending
+  // 4️⃣ Check location validation (Max 50m distance)
+  if (!user.userLat || !user.userLon) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Customer location is not updated. Please ask the customer to login and update their location.");
+  }
+  if (!salon.lat || !salon.lon) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Salon location is not updated");
+  }
+
+  const distanceInKm = getDistance(user.userLat, user.userLon, salon.lat as string, salon.lon as string);
+  const distanceInMeters = distanceInKm * 1000;
+
+  if (distanceInMeters > 50) {
+      throw new AppError(httpStatus.BAD_REQUEST, `Customer is not within 50m of the salon. Distance: ${Math.round(distanceInMeters)}m`);
+  }
+
+  let coinsToGrant = 0;
+
+  // 5️⃣ Check if there is already a pending visit from today
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
-  const todayVisitHistory = await PointIssuedHistory.findOne({
+  let todayVisitHistory = await PointIssuedHistory.findOne({
     userId: user._id,
     salonId: salon._id,
     createdAt: { $gte: startOfDay, $lte: endOfDay }
   });
 
   if (!todayVisitHistory) {
-    throw new AppError(httpStatus.NOT_FOUND, "No visit history found for today to approve. User must confirm visit first.");
+      // User didn't confirm visit previously, so we issue points now
+      if (payload.points !== undefined && payload.points > 0) {
+          // Owner assigned points manually
+          coinsToGrant = payload.points;
+          
+          await PointIssuedHistory.create({
+              userId: user._id,
+              salonId: salon._id,
+              points: coinsToGrant,
+              services: payload.services,
+              totalBill: payload.totalBill,
+          });
+
+          await ViewReward.findOneAndUpdate(
+              { userId: user._id, salonId: salon._id },
+              {
+                  $inc: { viewCount: 1, totalCoins: coinsToGrant },
+                  $set: { status: IStatus.APPROVED, lastVisitAt: new Date() },
+              },
+              { upsert: true }
+          );
+      } else {
+          // Auto calculate points using visitSalon logic
+          const visitResult = await visitSalon(salon._id.toString(), user._id.toString(), {
+              services: payload.services,
+              totalBill: payload.totalBill,
+              status: IStatus.APPROVED
+          });
+          coinsToGrant = visitResult.coinsBreakdown.total;
+      }
+  } else {
+      // User already confirmed visit, we just approve their pending coins
+      const viewReward = await ViewReward.findOne({ userId: user._id, salonId: salon._id });
+      if (!viewReward || !viewReward.pendingCoins || viewReward.pendingCoins <= 0) {
+        throw new AppError(httpStatus.BAD_REQUEST, "User has already received a visit coin for this salon today");
+      }
+      coinsToGrant = viewReward.pendingCoins;
+
+      todayVisitHistory.services = payload.services;
+      todayVisitHistory.totalBill = payload.totalBill;
+      await todayVisitHistory.save();
   }
 
-  // 5️⃣ Update ViewReward status and transfer coins
-  const viewReward = await ViewReward.findOne({ userId: user._id, salonId: salon._id });
-  if (!viewReward || !viewReward.pendingCoins || viewReward.pendingCoins <= 0) {
-    throw new AppError(httpStatus.BAD_REQUEST, "No pending coins found for this user at this salon.");
+  // 6️⃣ Grant coins to user
+  if (coinsToGrant > 0) {
+      await UserModel.findByIdAndUpdate(user._id, {
+        $inc: { coins: coinsToGrant }
+      });
   }
 
-  const coinsToGrant = viewReward.pendingCoins;
+  // 7️⃣ Reset pending coins and mark as approved
+  await ViewReward.findOneAndUpdate(
+      { userId: user._id, salonId: salon._id },
+      { $set: { pendingCoins: 0, status: IStatus.APPROVED } }
+  );
 
-  // Grant coins to user
-  await UserModel.findByIdAndUpdate(user._id, {
-    $inc: { coins: coinsToGrant }
-  });
-
-  // Reset pending coins and mark as approved
-  viewReward.pendingCoins = 0;
-  viewReward.status = IStatus.APPROVED;
-  await viewReward.save();
-
-  // 6️⃣ Update PointIssuedHistory
-  todayVisitHistory.services = payload.services;
-  todayVisitHistory.totalBill = payload.totalBill;
-  await todayVisitHistory.save();
-
-  // 7️⃣ Notify user
+  // 8️⃣ Notify user
   socketHelper.emit("notification", {
     receiver: user._id.toString(),
     title: "Visit Approved",
