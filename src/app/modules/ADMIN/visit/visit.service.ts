@@ -1,4 +1,4 @@
-import { Types } from "twilio/lib/rest/content/v1/content";
+import mongoose from "mongoose";
 import { QueryBuilder } from "../../../utils/QueryBuilder";
 import { PointIssuedHistory, ViewReward } from "../../reward/reward.model";
 import { UserModel } from "../../user/user.model";
@@ -11,69 +11,106 @@ import { INOTIFICATION_EVENT, INOTIFICATION_TYPE, IREFERENCE_TYPE } from "../../
 import { saveNotification, socketHelper } from "../../../helpers/socketHelper";
 
 // visit.service.ts
+
+
+
 const getAllVisitRecord = async (query: any) => {
-    const { userId, salonId, reqUserId, ...rest } = query;
-    const mongoQuery: any = {}
+  const { userId, salonId, reqUserId, ...rest } = query;
 
-    if (userId) {
-        const user = await UserModel.findById(userId)
-        if (!user) {
-            throw new Error("User not found")
-        }
-        mongoQuery.userId = user._id
+  const mongoQuery: any = {};
+
+  if (userId) {
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new Error("User not found");
     }
-    if (salonId) {
-        const salon = await SalonModel.findById(salonId)
-        if (!salon) {
-            throw new Error("Salon not found")
-        }
-        mongoQuery.salonId = salon._id
+    mongoQuery.userId = user._id;
+  }
+
+  if (salonId) {
+    const salon = await SalonModel.findById(salonId);
+    if (!salon) {
+      throw new Error("Salon not found");
     }
+    mongoQuery.salonId = salon._id;
+  }
 
-    const userInfo = await UserModel.findById(query.reqUserId);
-    if (userInfo?.role === USER_ROLE.OWNER) {
-        const salon = await SalonModel.findOne({ admin: userInfo._id });
-        if (salon) {
-            mongoQuery.salonId = salon._id;
-        }
+  const userInfo = await UserModel.findById(reqUserId);
+
+  if (userInfo?.role === USER_ROLE.OWNER) {
+    const salon = await SalonModel.findOne({ admin: userInfo._id });
+
+    if (salon) {
+      mongoQuery.salonId = salon._id;
     }
+  }
 
-    const result = ViewReward.find(mongoQuery).populate("userId", "name phoneNumber").populate("salonId", "service businessName location").sort({ updatedAt: -1 });
+  // Get all visit history
+  const visitQuery = PointIssuedHistory.find(mongoQuery)
+    .populate("userId", "name phoneNumber coins")
+    .populate("salonId", "service businessName location")
+    .sort({ createdAt: -1 });
 
-    const queryBuilder = new QueryBuilder(result, rest)
-        .search(['name'])
-        .filter()
-        .limit()
-        .paginate()
+  const queryBuilder = new QueryBuilder(visitQuery, rest)
+    .filter()
+    .limit()
+    .paginate();
 
-    const [meta, data] = await Promise.all([
-        queryBuilder.getMeta(),
-        queryBuilder.build(),
-    ]);
-    if (data.length === 0) {
-        throw new AppError(httpStatus.NOT_FOUND, "No visit history found");
-    }
+  const [meta, visits] = await Promise.all([
+    queryBuilder.getMeta(),
+    queryBuilder.build(),
+  ]);
 
-    console.log(data)
+  if (visits.length === 0) {
+    return {
+      meta,
+      data: [],
+    };
+  }
 
-    const resultData = data?.map((item: any) => {
-        return {
-            user: item.userId?.name || 'N/A',
-            userId: item.userId?._id,
-            rewardId: item._id,
-            lastView: item.lastVisitAt,
-            totalVisit: item.totalVisit,
-            salonName: item.salonId?.businessName || 'N/A',
-            location: item.salonId?.location || 'N/A',
-            totalPoint: item.pendingCoins,
-            serviceName: item.salonId?.service || 'N/A',
-            status: item.status,
-        }
+  const resultData = await Promise.all(
+    visits.map(async (item: any) => {
+      const reward = await ViewReward.findOne({
+        userId: item.userId?._id,
+        salonId: item.salonId?._id,
+      });
+
+      return {
+        user: item.userId?.name || "N/A",
+        userId: item.userId?._id,
+        phoneNumber: item.userId?.phoneNumber || "N/A",
+
+        rewardId: reward?._id || null,
+
+        lastView: item.createdAt,
+
+        totalVisit: reward?.viewCount || 1,
+
+        salonName: item.salonId?.businessName || "N/A",
+        location: item.salonId?.location || "N/A",
+
+        totalCoins: reward?.totalCoins || 0,
+        everyVisitCoins: reward?.everyVisitCoins || item.points || 0,
+        pendingCoins: reward?.pendingCoins || 0,
+
+        userCurrentCoins: item.userId?.coins || 0,
+
+        services: item.services || [],
+        totalBill: item.totalBill || 0,
+
+        serviceName: item.salonId?.service || "N/A",
+
+        status: reward?.status || "APPROVED",
+      };
     })
+  );
 
+  return {
+    meta,
+    data: resultData,
+  };
+};
 
-    return { meta, data: resultData }
-}
 
 const approveVisitCoin = async (id: string, userId: string) => {
     const visit = await ViewReward.findById(id);

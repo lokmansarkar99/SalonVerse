@@ -22,8 +22,8 @@ export const Reward = model("Reward", rewardSchema);
 const viewRewardSchema = new Schema({
     userId: { type: Types.ObjectId, ref: "User" },
     salonId: { type: Types.ObjectId, ref: "Salon" },
-    pendingCoins: { type: Number },
-    totalCoins: { type: Number },
+    pendingCoins: { type: Number, default: 0 },
+    totalCoins: { type: Number, default: 0 },
     status: { type: String, enum: Object.values(IStatus), default: IStatus.PENDING },
     viewCount: { type: Number, default: 0 },
     lastVisitAt: { type: Date },
@@ -31,7 +31,9 @@ const viewRewardSchema = new Schema({
     everyVisitCoins: { type: Number, default: 0 },
     timeZoneBonusCoins: { type: Number, default: 0 },
     totalVisitBonusCoins: { type: Number, default: 0 },
-    everyShareBonusCoins: { type: Number, default: 0 }
+    everyShareBonusCoins: { type: Number, default: 0 },
+    services: { type: [String], default: [] },
+    totalBill: { type: Number, default: 0 }
 }, {
     timestamps: true
 });

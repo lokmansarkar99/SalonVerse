@@ -13,18 +13,32 @@ import generateNumber from "../../../utils/generate";
 
 // customer.service.ts
 const createCustomerManually = async (payload: any, adminId: string) => {
+    console.log("========== CREATE CUSTOMER MANUALLY ==========");
+    console.log("Admin ID:", adminId);
+    console.log("Payload:", payload);
+
     const admin = await UserModel.findById(adminId);
+    console.log("Admin:", admin);
+
     if (!admin) throw new AppError(httpStatus.NOT_FOUND, "Admin not found");
+
+    console.log("Admin Role:", admin.role);
 
     if (admin.role !== USER_ROLE.OWNER && admin.role !== USER_ROLE.SUPER_ADMIN) {
         throw new AppError(httpStatus.FORBIDDEN, "You are not authorized");
     }
 
-    const salon = await mongoose.model('Salon').findOne({ admin: admin._id });
+    const salon = await mongoose.model("Salon").findOne({ admin: admin._id });
+    console.log("Salon:", salon);
+
     if (!salon) throw new AppError(httpStatus.NOT_FOUND, "Salon not found");
 
     let user = await UserModel.findOne({ phoneNumber: payload.phoneNumber });
+    console.log("Existing User:", user);
+
     if (!user) {
+        console.log("User not found. Creating new user...");
+
         user = await UserModel.create({
             name: payload.name || "Customer",
             phoneNumber: payload.phoneNumber,
@@ -33,30 +47,58 @@ const createCustomerManually = async (payload: any, adminId: string) => {
             status: IStatus.ACTIVE,
             referralCode: generateNumber(8).toString(),
         });
+
+        console.log("New User Created:", user);
     }
+
+    console.log("Calling visitSalon()...");
+
+    // services can come as a string or array — normalize to array
+    const servicesArray = Array.isArray(payload.services)
+        ? payload.services
+        : payload.services
+        ? [payload.services]
+        : [];
 
     const visitResult = await visitSalon(salon._id.toString(), user._id.toString(), {
-        services: payload.services || [],
+        services: servicesArray,
         totalBill: payload.totalBill || 0,
-        status: IStatus.APPROVED
+        status: IStatus.APPROVED,
     });
 
+    console.log("visitSalon Result:", JSON.stringify(visitResult, null, 2));
+
     const coinsToGrant = visitResult.coinsBreakdown.total;
+    console.log("Coins To Grant:", coinsToGrant);
 
-    if (coinsToGrant > 0 && visitResult.reward) {
+    if (coinsToGrant > 0) {
+        console.log("Updating user coins...");
+
+        // Add coins to user's balance
         await UserModel.findByIdAndUpdate(user._id, {
-            $inc: { coins: coinsToGrant }
+            $inc: { coins: coinsToGrant },
         });
 
-        await ViewReward.findByIdAndUpdate(visitResult.reward._id, {
-            $inc: { pendingCoins: -coinsToGrant }
-        });
+        // Update ViewReward: increment totalCoins, reset pendingCoins to 0 (visit is approved)
+        await ViewReward.findOneAndUpdate(
+            { userId: user._id, salonId: salon._id },
+            {
+                $inc: { totalCoins: coinsToGrant },
+                $set: { pendingCoins: 0, status: IStatus.APPROVED },
+            }
+        );
+
+        console.log("Coins granted successfully.");
+    } else {
+        console.log("No coins granted.");
     }
+
+    console.log("========== END ==========");
 
     return {
         user,
         visitResult,
-        grantedCoins: coinsToGrant
+        grantedCoins: coinsToGrant,
     };
 };
 
